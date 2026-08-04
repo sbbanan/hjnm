@@ -105,7 +105,6 @@ static size_t get_high_memory(void)
 #else
 #define valid_phys_addr_range(addr, count) true
 #endif
-
 size_t read_physical_address(phys_addr_t pa, void __user *buffer, size_t size)
 {
     struct page *page;

@@ -5,10 +5,10 @@
 #include <linux/dcache.h>
 #include <linux/path.h>
 #include <linux/namei.h>
-#include "1.h"
+    #include "1.h"
 #include "2.h"
 #include "3.h"
-#include "4.h"
+
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0))
 	MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver); 
@@ -16,21 +16,11 @@
 
 long dispatch_ioctl(struct file* const file, unsigned int const cmd, unsigned long const arg)
 {
- static BP_PARAM bp;
+ 
 	static COPY_MEMORY cm;
 	static MODULE_BASE mb;
 	static char name[0x100] = {0};
-	/*static char key[0x100] = {0};
-	static bool is_verified = false;
-	if(cmd == OP_INIT_KEY && !is_verified) {
-		if (copy_from_user(key, (void __user*)arg, sizeof(key)-1) != 0) {
-			return -1;
-		}
-		is_verified = init_key(key, sizeof(key));
-	}
-	if(is_verified == false) {
-		return -1;
-	}*/
+
 	switch (cmd) {
 		case OP_READ_MEM:
 			{
@@ -64,21 +54,7 @@ long dispatch_ioctl(struct file* const file, unsigned int const cmd, unsigned lo
 				}
 			}
 			break;
-case OP_SET_BP:
-        {
-            if (copy_from_user(&bp, (void __user *)arg, sizeof(bp)) != 0)
-                return -1;
-            if (bp.pid <= 0 || bp.addr == 0)
-                return -1;
-hook_attach(bp.pid, bp.addr);
-       return 0;
-        }
-        case OP_CLEAR_BP:
-        {
-hook_detach();
 
-            return 0;
-        }
 		default:
 			break;
 	}
@@ -120,7 +96,11 @@ int dispatch_open(struct inode *node, struct file *file)
 int dispatch_close(struct inode *node, struct file *file)
 {
 	list_add(&__this_module.list, prev_module); //创建链表
-	mem_tool_class = class_create(THIS_MODULE, devicename); //创建设备类
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,5,0)
+    mem_tool_class = class_create(THIS_MODULE, devicename);
+#else
+    mem_tool_class = class_create(devicename, THIS_MODULE);
+#endif
 	memdev->dev = device_create(mem_tool_class, NULL, mem_tool_dev_t, NULL, "%s", devicename); //创建设备文件
 	printk("关闭文件成功\n");
 	return 0;
@@ -131,12 +111,8 @@ static int __init driver_entry(void)
 	int ret;
 	devicename = DEVICE_NAME;
 
-	ret = alloc_chrdev_region(&mem_tool_dev_t, 0, 1, devicename);
-	if (ret < 0) {
-		printk("设备编号分配失败: %d\n", ret);
-		return ret;
-	}
-
+	
+    
 	//2.动态申请设备结构体的内存
 	memdev = kmalloc(sizeof(struct mem_tool_device), GFP_KERNEL);
 	if (!memdev) {
@@ -157,7 +133,11 @@ static int __init driver_entry(void)
 	}
 
 	//4.创建设备文件
-	mem_tool_class = class_create(THIS_MODULE, devicename); //创建设备类
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(5,5,0)
+    mem_tool_class = class_create(THIS_MODULE, devicename);
+#else
+    mem_tool_class = class_create(devicename, THIS_MODULE);
+#endif
 	if (IS_ERR(mem_tool_class)) {
 		printk("创建设备类失败: %d\n", ret);
 		goto done;
