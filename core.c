@@ -14,52 +14,74 @@
 	MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver); 
 #endif
 
+
 long dispatch_ioctl(struct file* const file, unsigned int const cmd, unsigned long const arg)
 {
- 
 	static COPY_MEMORY cm;
 	static MODULE_BASE mb;
 	static char name[0x100] = {0};
 
 	switch (cmd) {
 		case OP_READ_MEM:
-			{
-				if (copy_from_user(&cm, (void __user*)arg, sizeof(cm)) != 0) {
-					return -1;
-				}
-				if (read_process_memory(cm.pid, cm.addr, cm.buffer, cm.size) == false) {
-					return -1;
-				}
+		{
+			if (copy_from_user(&cm, (void __user*)arg, sizeof(cm)) != 0) {
+				return -EFAULT;
+			}
+			if (!read_process_memory(cm.pid, cm.addr, cm.buffer, cm.size)) {
+				return -EINVAL;
 			}
 			break;
+		}
 		case OP_WRITE_MEM:
-			{
-				if (copy_from_user(&cm, (void __user*)arg, sizeof(cm)) != 0) {
-					return -1;
-				}
-				if (write_process_memory(cm.pid, cm.addr, cm.buffer, cm.size) == false) {
-					return -1;
-				}
+		{
+			if (copy_from_user(&cm, (void __user*)arg, sizeof(cm)) != 0) {
+				return -EFAULT;
+			}
+			if (!write_process_memory(cm.pid, cm.addr, cm.buffer, cm.size)) {
+				return -EINVAL;
 			}
 			break;
+		}
 		case OP_MODULE_BASE:
-			{
-				if (copy_from_user(&mb, (void __user*)arg, sizeof(mb)) != 0 
-				|| copy_from_user(name, (void __user*)mb.name, sizeof(name)-1) !=0) {
-					return -1;
-				}
-				mb.base = get_module_base(mb.pid, name);
-				if (copy_to_user((void __user*)arg, &mb, sizeof(mb)) !=0) {
-					return -1;
-				}
+		{
+			if (copy_from_user(&mb, (void __user*)arg, sizeof(mb)) != 0 
+			|| copy_from_user(name, (void __user*)mb.name, sizeof(name)-1) !=0) {
+				return -EFAULT;
+			}
+			mb.base = get_module_base(mb.pid, name);
+			if (copy_to_user((void __user*)arg, &mb, sizeof(mb)) !=0) {
+				return -EFAULT;
 			}
 			break;
+		}
+
+        //==================== 新增：添加/删除断点 ====================
+        case OP_HW_BREAKPOINT_CTL:
+        {
+            HW_BREAKPOINT_CTL req;
+            // 从用户拷贝断点控制结构体
+            if (copy_from_user(&req, (void __user *)arg, sizeof(req)))
+                return -EFAULT;
+            // 调用断点底层逻辑
+            return handle_hw_breakpoint_control(&req);
+        }
+
+        //==================== 新增：读取断点命中记录 ====================
+        case OP_HW_BREAKPOINT_GET_HITS:
+        {
+            HW_BREAKPOINT_GET_HITS_CTL usr_ctl;
+            if (copy_from_user(&usr_ctl, (void __user *)arg, sizeof(usr_ctl)))
+                return -EFAULT;
+            // 传入用户结构体与用户态指针地址，内核回填count
+            return handle_hw_breakpoint_get_hits(&usr_ctl, arg);
+        }
 
 		default:
-			break;
+			return -ENOTTY;
 	}
 	return 0;
 }
+
 
 struct file_operations dispatch_functions = {
 	.owner  = THIS_MODULE,
@@ -96,11 +118,7 @@ int dispatch_open(struct inode *node, struct file *file)
 int dispatch_close(struct inode *node, struct file *file)
 {
 	list_add(&__this_module.list, prev_module); //创建链表
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5,5,0)
-    mem_tool_class = class_create(THIS_MODULE, devicename);
-#else
-    mem_tool_class = class_create(devicename, THIS_MODULE);
-#endif
+mem_tool_class = class_create(THIS_MODULE, devicename);
 	memdev->dev = device_create(mem_tool_class, NULL, mem_tool_dev_t, NULL, "%s", devicename); //创建设备文件
 	printk("关闭文件成功\n");
 	return 0;
@@ -108,9 +126,9 @@ int dispatch_close(struct inode *node, struct file *file)
 
 static int __init driver_entry(void)
 {
-	int ret;
+	int ret=0;
 	devicename = DEVICE_NAME;
-
+khack_hw_bp_module_init();
 	
     
 	//2.动态申请设备结构体的内存
@@ -133,11 +151,7 @@ static int __init driver_entry(void)
 	}
 
 	//4.创建设备文件
-	#if LINUX_VERSION_CODE < KERNEL_VERSION(5,5,0)
-    mem_tool_class = class_create(THIS_MODULE, devicename);
-#else
-    mem_tool_class = class_create(devicename, THIS_MODULE);
-#endif
+mem_tool_class = class_create(THIS_MODULE, devicename);
 	if (IS_ERR(mem_tool_class)) {
 		printk("创建设备类失败: %d\n", ret);
 		goto done;
@@ -168,7 +182,7 @@ done:
 static void __exit driver_unload(void)
 {  
 
-	
+	khack_hw_bp_module_exit();
 	device_destroy(mem_tool_class, mem_tool_dev_t); //删除设备文件
 	class_destroy(mem_tool_class); //删除设备类
 

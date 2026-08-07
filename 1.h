@@ -1,8 +1,7 @@
 #include <linux/slab.h>
 #include <linux/random.h>
 
-#define DEVICE_NAME "hqdw" //当前驱动DEV文件名
-
+#define DEVICE_NAME "hqdw" //当前驱动DEV文件
 typedef struct _COPY_MEMORY {
     pid_t pid;
     uintptr_t addr;
@@ -21,7 +20,8 @@ enum OPERATIONS {
     OP_READ_MEM = 0x801,
     OP_WRITE_MEM = 0x802,
     OP_MODULE_BASE = 0x803,
-   
+    OP_HW_BREAKPOINT_CTL = 0x804,
+     OP_HW_BREAKPOINT_GET_HITS = 0x805
 };
 
 
