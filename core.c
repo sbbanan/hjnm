@@ -56,7 +56,19 @@ long dispatch_ioctl(struct file* const file, unsigned int const cmd, unsigned lo
 		}
 
         //==================== 新增：添加/删除断点 ====================
-   
+   case OP_HW_BREAKPOINT_CTL:
+         {
+             HW_BREAKPOINT_CTL k_ctl;
+             if (copy_from_user(&k_ctl, (void __user *)arg, sizeof(k_ctl)))
+                 return -EFAULT;
+             ret = handle_hw_breakpoint_control(&k_ctl);
+             break;
+         }
+         case OP_HW_BREAKPOINT_GET_HITS:
+         {
+             ret = handle_hw_breakpoint_get_hits((HW_BREAKPOINT_GET_HITS_CTL __user *)arg);
+             break;
+         }
 
 		default:
 			return -ENOTTY;
@@ -110,7 +122,6 @@ static int __init driver_entry(void)
 {
 	int ret=0;
 	devicename = DEVICE_NAME;
-khack_hw_bp_module_init();
 	
     
 	//2.动态申请设备结构体的内存
@@ -164,7 +175,7 @@ done:
 static void __exit driver_unload(void)
 {  
 
-	khack_hw_bp_module_exit();
+	hw_bp_clean_all();
 	device_destroy(mem_tool_class, mem_tool_dev_t); //删除设备文件
 	class_destroy(mem_tool_class); //删除设备类
 
