@@ -56,25 +56,7 @@ long dispatch_ioctl(struct file* const file, unsigned int const cmd, unsigned lo
 		}
 
         //==================== 新增：添加/删除断点 ====================
-        case OP_HW_BREAKPOINT_CTL:
-        {
-            HW_BREAKPOINT_CTL req;
-            // 从用户拷贝断点控制结构体
-            if (copy_from_user(&req, (void __user *)arg, sizeof(req)))
-                return -EFAULT;
-            // 调用断点底层逻辑
-            return handle_hw_breakpoint_control(&req);
-        }
-
-        //==================== 新增：读取断点命中记录 ====================
-        case OP_HW_BREAKPOINT_GET_HITS:
-        {
-            HW_BREAKPOINT_GET_HITS_CTL usr_ctl;
-            if (copy_from_user(&usr_ctl, (void __user *)arg, sizeof(usr_ctl)))
-                return -EFAULT;
-            // 传入用户结构体与用户态指针地址，内核回填count
-            return handle_hw_breakpoint_get_hits(&usr_ctl, arg);
-        }
+   
 
 		default:
 			return -ENOTTY;
